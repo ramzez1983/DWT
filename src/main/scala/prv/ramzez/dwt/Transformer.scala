@@ -1,38 +1,45 @@
 package prv.ramzez.dwt
 
-import org.bytedeco.javacpp.indexer.FloatIndexer
 import org.bytedeco.javacpp.opencv_core.{Mat, Point}
 import org.bytedeco.javacpp.{opencv_core, opencv_imgproc}
 
 object Transformer {
 }
 
-class Transformer(val lowFilter: List[Float], val highFilter: List[Float]) {
+case class Transformer(filter: Filter) {
 
-  def reduceColumns(dest: Mat): Mat = {
-    val columns = 0 to dest.cols() by 2
-    columns.map(r => dest.col(r)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
+  private def downscaleColumns(dest: Mat): Mat = scaleColumns(dest, 0.5)
+
+  private def upscaleColumns(dest: Mat): Mat = {
+    val columns = 0 until dest.cols() * 2
+    val z = Mat.zeros(dest.col(0).rows(), 1, dest.`type`()).asMat()
+    val result = columns.map(r => get(dest, r, x => dest.col(x), z)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
+    result
   }
 
-  def reduceRows(dest: Mat): Mat = {
-    val rows = 0 to dest.rows() by 2
-    rows.map(r => dest.row(r)).reduce { (a, b) => a.push_back(b); a }
+  private def get(dest: Mat, r: Int, g: Int => Mat, z: Mat) = {
+    if (Math.floorMod(r, 2) == 0) g(Math.floorDiv(r, 2))
+    else z
   }
 
-  //TODO: extract this to DWT Filter trait
-  def createKernel(filter: List[Float]): Mat = {
-    val k = Mat.zeros(1, filter.length, opencv_core.CV_32F).asMat()
-    val indexer = k.createIndexer().asInstanceOf[FloatIndexer]
-    for ((i, v) <- 0L to filter.length zip filter) {
-      indexer.put(0L, i, v)
-    }
-    k
+  private def scaleColumns(dest: Mat, factor: Double): Mat = {
+    val columns = 0 until (dest.cols() * factor).round.toInt
+    columns.map(r => dest.col((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
   }
 
-  lazy val rowHighFilter: Mat = createKernel(highFilter)
-  lazy val rowLowFilter: Mat = createKernel(lowFilter)
+  private def downscaleRows(dest: Mat): Mat = scaleRows(dest, 0.5)
 
-  def toColumnKernel(filter: Mat): Mat = filter.reshape(0, filter.cols())
+  private def upscaleRows(dest: Mat): Mat = {
+    val rows = 0 until dest.rows() * 2
+    val z = Mat.zeros(1, dest.row(0).cols(), dest.`type`()).asMat()
+    val result = rows.map(r => get(dest, r, x => dest.row(x), z)).reduce { (a, b) => a.push_back(b); a }
+    result
+  }
+
+  private def scaleRows(dest: Mat, factor: Double): Mat = {
+    val rows = 0 until (dest.rows() * factor).round.toInt
+    rows.map(r => dest.row((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }
+  }
 
   private val anchor = new Point(-1, -1)
   private val delta = 0.0
@@ -41,22 +48,42 @@ class Transformer(val lowFilter: List[Float], val highFilter: List[Float]) {
   def decomposeStep(img: Mat): DwtStep = {
     val low, high, ll, lh, hl, hh = new Mat()
 
-    opencv_imgproc.filter2D(img, low, -1, rowLowFilter, anchor, delta, borderType)
-    val low_2 = reduceColumns(low)
-    opencv_imgproc.filter2D(img, high, -1, rowHighFilter, anchor, delta, borderType)
-    val high_2 = reduceColumns(high)
+    opencv_imgproc.filter2D(img, low, -1, filter.rowLow, anchor, delta, borderType)
+    val low_2 = downscaleColumns(low)
+    opencv_imgproc.filter2D(img, high, -1, filter.rowHigh, anchor, delta, borderType)
+    val high_2 = downscaleColumns(high)
 
-    opencv_imgproc.filter2D(low_2, ll, -1, toColumnKernel(rowLowFilter), anchor, delta, borderType)
-    val ll_2 = reduceRows(ll)
-    opencv_imgproc.filter2D(low_2, lh, -1, toColumnKernel(rowHighFilter), anchor, delta, borderType)
-    val lh_2 = reduceRows(lh)
+    opencv_imgproc.filter2D(low_2, ll, -1, filter.columnLow, anchor, delta, borderType)
+    val ll_2 = downscaleRows(ll)
+    opencv_imgproc.filter2D(low_2, lh, -1, filter.columnHigh, anchor, delta, borderType)
+    val lh_2 = downscaleRows(lh)
 
-    opencv_imgproc.filter2D(high_2, hl, -1, toColumnKernel(rowLowFilter), anchor, delta, borderType)
-    val hl_2 = reduceRows(hl)
-    opencv_imgproc.filter2D(high_2, hh, -1, toColumnKernel(rowHighFilter), anchor, delta, borderType)
-    val hh_2 = reduceRows(hh)
+    opencv_imgproc.filter2D(high_2, hl, -1, filter.columnLow, anchor, delta, borderType)
+    val hl_2 = downscaleRows(hl)
+    opencv_imgproc.filter2D(high_2, hh, -1, filter.columnHigh, anchor, delta, borderType)
+    val hh_2 = downscaleRows(hh)
 
     DwtStep(hh_2, hl_2, lh_2, ll_2)
+  }
+
+  def recomposeStep(dwtStep: DwtStep): Mat = {
+    val high_1, high_2, low_1, low_2, img_1, img_2 = new Mat()
+    val hh = upscaleRows(dwtStep.HH)
+    opencv_imgproc.filter2D(hh, high_1, -1, filter.columnHigh, anchor, delta, borderType)
+    val hl = upscaleRows(dwtStep.HL)
+    opencv_imgproc.filter2D(hl, high_2, -1, filter.columnLow, anchor, delta, borderType)
+    val high = upscaleColumns(opencv_core.add(high_1, high_2).asMat())
+
+
+    val lh = upscaleRows(dwtStep.LH)
+    opencv_imgproc.filter2D(lh, low_1, -1, filter.columnHigh, anchor, delta, borderType)
+    val ll = upscaleRows(dwtStep.LL)
+    opencv_imgproc.filter2D(ll, low_2, -1, filter.columnLow, anchor, delta, borderType)
+    val low = upscaleColumns(opencv_core.add(low_1, low_2).asMat())
+
+    opencv_imgproc.filter2D(high, img_1, -1, filter.rowHigh, anchor, delta, borderType)
+    opencv_imgproc.filter2D(low, img_2, -1, filter.rowLow, anchor, delta, borderType)
+    opencv_core.add(img_1, img_2).asMat()
   }
 
   def decompose(img: Mat, level: Int): DwtStructure = {
