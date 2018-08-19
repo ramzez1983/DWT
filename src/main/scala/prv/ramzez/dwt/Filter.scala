@@ -2,11 +2,13 @@ package prv.ramzez.dwt
 
 import org.bytedeco.javacpp.opencv_core.Mat
 
-case class Filter(rowLow: Mat, rowHigh: Mat) {
-  lazy val columnHigh: Mat = toColumnKernel(rowHigh)
-  lazy val columnLow: Mat = toColumnKernel(rowLow)
+case class Filter(columnLow: Mat, columnHigh: Mat) {
+  lazy val rowHigh: Mat = transpose(columnHigh)
+  lazy val rowLow: Mat = transpose(columnLow)
 
-  private def toColumnKernel(filter: Mat): Mat = filter.t().asMat()
+  private def transpose(filter: Mat): Mat = filter.t().asMat()
+
+
 }
 
 object Filter {

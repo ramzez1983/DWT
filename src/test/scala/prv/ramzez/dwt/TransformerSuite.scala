@@ -9,37 +9,47 @@ import org.scalatest.junit.JUnitRunner
 class TransformerSuite extends FunSuite {
   test("decompose step test") {
     //given
-    val trans = Transformer(Filter(List(1f, 2f), List(0.5f, 0.25f)))
-    val img = (0 until 9 map (i => i.toFloat) toList).reshape(0, 3)
-    //    [[0,1,2]
-    //     [3,4,5]
-    //     [6,7,8]]
+    val trans = Transformer(Filter(List(1f, 1f), List(1f, -1f)))
+    val img = (0 until 16 map (i => i.toFloat) toList).reshape(0, 4)
+    //    [[ 0, 1, 2, 3]
+    //     [ 4, 5, 6, 7]
+    //     [ 8, 9,10,11]
+    //     [12,13,14,15]
     //when
     val struc = trans.decomposeStep(img)
     //    low
-    //    [[ 1, 2, 5]
-    //     [10,11,14]
-    //     [19,20,23]]
+    //    [[ 1, 3, 5, 3]
+    //     [ 9,11,13,11]
+    //     [17,19,21,19]
+    //     [25,27,29,27]
     //    high
-    //    [[0.50, 0.25, 1.00]
-    //     [2.75, 2.50, 3.25]
-    //     [5.00, 4.75, 5.50]]
+    //    [[-1,-1,-1, 1]
+    //     [-1,-1,-1, 1]
+    //     [-1,-1,-1, 1]
+    //     [-1,-1,-1, 1]]
     //    hh
-    //    [[1.500, 1.875]
-    //      2.625, 3.000]
-    //    hl
-    //    [[ 6.00,  7.50]
-    //      12.75, 14.25]]
+    //    [[0, 0]
+    //      0, 0]
+    //    ll
+    //    [[10,18]
+    //      42,50]]
     //then
-    val hh = List(1.5f, 1.875f, 2.6250f, 3f).reshape(0, 2)
-    assert(matEquals(hh, struc.HH), s"hh should be: ${hh.createIndexer().asInstanceOf[FloatIndexer]}, hh is: ${struc.HH.createIndexer().asInstanceOf[FloatIndexer]}"
+    val ll = List(10f, 18f, 42f, 50f).reshape(0, 2)
+    assert(matEquals(ll, struc.LL), s"ll should be: ${ll.createIndexer().asInstanceOf[FloatIndexer]}, ll is: ${struc.LL.createIndexer().asInstanceOf[FloatIndexer]}"
     )
   }
   test("decompose and recompose step test") {
     //given
     val trans = Transformer(Filter.haar)
     val dim = 8
-    val img = (0 until (dim * dim) map (i => Math.random()) toList).reshape(0, dim)
+
+    def produceValue(i: Int) = {
+      val b = 0
+          if (Math.floorDiv(i,dim)<b || Math.floorDiv(i,dim)>dim-1-b || Math.floorMod(i,dim)<b||Math.floorMod(i,dim)>dim-1-b) 0.0
+          else (if (Math.random() < 0.5) 1.0 else 0.0)
+    }
+
+    val img = (0 until (dim * dim) map (i => i.toFloat) toList).reshape(0, dim)
     //when
     val struc = trans.decomposeStep(img)
     val imgRe = trans.recomposeStep(struc)
