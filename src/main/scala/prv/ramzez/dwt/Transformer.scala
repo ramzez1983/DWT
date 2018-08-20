@@ -49,18 +49,33 @@ case class Transformer(filter: Filter) extends LazyLogging {
   private val delta = 0.0
   private val borderType = opencv_core.BORDER_DEFAULT
 
-  def getColRange(img: Mat, start: Int, size: Int): Mat = {
-    val result = new Mat
-    for (i <- start until (start+size)) {
-      result.push_back(img.col(i % img.cols()))
-    }
-    result.reshape(0,size).t().asMat()
+  def recomposeStep(dwtStep: DwtStep): Mat = {
+    logger.debug(s"recompose step started")
+    val hh = upscaleRows(dwtStep.HH)
+    val high_1 = filterColumn(hh, filter.reversedColumnHigh)
+    val hl = upscaleRows(dwtStep.HL)
+    val high_2 = filterColumn(hl, filter.reversedColumnLow)
+    val high = upscaleColumns(opencv_core.add(high_1, high_2).asMat())
+
+    val lh = upscaleRows(dwtStep.LH)
+    val low_1 = filterColumn(lh, filter.reversedColumnHigh)
+    val ll = upscaleRows(dwtStep.LL)
+    val low_2 = filterColumn(ll, filter.reversedColumnLow)
+    val low = upscaleColumns(opencv_core.add(low_1, low_2).asMat())
+
+    val img_1 = filterRow(high, filter.reversedRowHigh)
+    val img_2 = filterRow(low, filter.reversedRowLow)
+    val result = opencv_core.add(img_1, img_2).asMat()
+    logger.debug(s"result is ${printMat(result)}")
+    result
   }
 
   def filterRow(img: Mat, kernel: Mat): Mat = {
     val r, tmp = new Mat()
-    for (i <- 0 until img.cols()) {
-      opencv_core.gemm(getColRange(img,i,2), kernel, 1, new Mat(), 0, tmp)
+    val step = kernel.rows()
+    val mod = step / 2 - 1
+    for (i <- 0 - mod until img.cols() - mod) {
+      opencv_core.gemm(getColRange(img, i, step), kernel, 1, new Mat(), 0, tmp)
       r.push_back(tmp)
     }
     val result = r.reshape(0, img.rows()).t().asMat()
@@ -68,19 +83,28 @@ case class Transformer(filter: Filter) extends LazyLogging {
     result
   }
 
-  def getRowRange(img: Mat, start: Int, size: Int): Mat = {
+  def getColRange(img: Mat, start: Int, size: Int): Mat = {
     val result = new Mat
     for (i <- start until (start+size)) {
-      result.push_back(img.row(i % img.rows()))
+      result.push_back(img.col(withBorder(i, img.cols())))
     }
-    result
+    result.reshape(0, size).t().asMat()
+  }
+
+  private def withBorder(i: Int, max: Int) = {
+    val r = Math.floorMod(i, max)
+    //val r = if (i < 0) -i else if (i>=max)  max - (i - max) - 2 else i
+    //val r = if (i < 0) 0 else if (i>=max)  max-1 else i
+    r
   }
 
   def filterColumn(img: Mat, kernel: Mat): Mat = {
     //opencv_imgproc.filter2D(hh, high_1, -1, filter.columnHigh, anchor, delta, borderType)
     val result,tmp = new Mat()
-    for (i <- 0 until img.rows()) {
-      opencv_core.gemm(kernel, getRowRange(img,i,2), 1, new Mat(), 0, tmp)
+    val step = kernel.cols()
+    val mod = step / 2 - 1
+    for (i <- 0 - mod until img.rows() - mod) {
+      opencv_core.gemm(kernel, getRowRange(img, i, step), 1, new Mat(), 0, tmp)
       result.push_back(tmp)
     }
     logger.debug(s"filtered columns of ${printMat(img)} to ${printMat(result)}")
@@ -100,24 +124,11 @@ case class Transformer(filter: Filter) extends LazyLogging {
     DwtStep(hh, hl, lh, ll)
   }
 
-  def recomposeStep(dwtStep: DwtStep): Mat = {
-    logger.debug(s"recompose step started")
-    val hh = upscaleRows(dwtStep.HH)
-    val high_1 = filterColumn(hh,filter.columnHigh)
-    val hl = upscaleRows(dwtStep.HL)
-    val high_2 = filterColumn(hl,filter.columnLow)
-    val high = upscaleColumns(opencv_core.add(high_1, high_2).asMat())
-
-    val lh = upscaleRows(dwtStep.LH)
-    val low_1 = filterColumn(lh,filter.columnHigh)
-    val ll = upscaleRows(dwtStep.LL)
-    val low_2 = filterColumn(ll,filter.columnLow)
-    val low = upscaleColumns(opencv_core.add(low_1, low_2).asMat())
-
-    val img_1 = filterRow(high,filter.rowHigh)
-    val img_2 = filterRow(low,filter.rowLow)
-    val result = opencv_core.add(img_1, img_2).asMat()
-    logger.debug(s"result is ${printMat(result)}")
+  def getRowRange(img: Mat, start: Int, size: Int): Mat = {
+    val result = new Mat
+    for (i <- start until (start + size)) {
+      result.push_back(img.row(withBorder(i, img.rows())))
+    }
     result
   }
 

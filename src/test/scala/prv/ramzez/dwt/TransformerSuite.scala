@@ -40,16 +40,16 @@ class TransformerSuite extends FunSuite {
   }
   test("decompose and recompose step test") {
     //given
-    val trans = Transformer(Filter.haar)
+    val trans = Transformer(Filter.d4)
     val dim = 8
 
     def produceValue(i: Int) = {
       val b = 0
           if (Math.floorDiv(i,dim)<b || Math.floorDiv(i,dim)>dim-1-b || Math.floorMod(i,dim)<b||Math.floorMod(i,dim)>dim-1-b) 0.0
-          else (if (Math.random() < 0.5) 1.0 else 0.0)
+          else i.toDouble //Math.random()
     }
 
-    val img = (0 until (dim * dim) map (i => i.toFloat) toList).reshape(0, dim)
+    val img = (0 until (dim * dim) map (i => produceValue(i)) toList).reshape(0, dim)
     //when
     val struc = trans.decomposeStep(img)
     val imgRe = trans.recomposeStep(struc)
