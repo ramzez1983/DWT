@@ -25,4 +25,8 @@ package object dwt {
   def matEquals(a: Mat, b: Mat): Boolean = {
     opencv_core.countNonZero(opencv_core.notEquals(a, b).asMat()) == 0
   }
+
+  def printMat(img: Mat): String = {
+    img.createIndexer().asInstanceOf[FloatIndexer].toString
+  }
 }
