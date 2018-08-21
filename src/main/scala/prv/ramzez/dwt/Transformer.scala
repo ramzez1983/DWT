@@ -2,7 +2,7 @@ package prv.ramzez.dwt
 
 import com.typesafe.scalalogging.LazyLogging
 import org.bytedeco.javacpp.opencv_core
-import org.bytedeco.javacpp.opencv_core.{Mat, Point}
+import org.bytedeco.javacpp.opencv_core.Mat
 
 object Transformer {
 }
@@ -45,9 +45,10 @@ case class Transformer(filter: Filter) extends LazyLogging {
     rows.map(r => dest.row((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }
   }
 
-  private val anchor = new Point(-1, -1)
-  private val delta = 0.0
-  private val borderType = opencv_core.BORDER_DEFAULT
+  //private val anchor = new Point(0, 1)
+  //private val delta = 0.0
+  //switching to own implementation because opencv_imgproc.filter2D does not support circular boarder type
+  //private val borderType = opencv_core.BORDER_DEFAULT
 
   def recomposeStep(dwtStep: DwtStep): Mat = {
     logger.debug(s"recompose step started")
@@ -72,6 +73,9 @@ case class Transformer(filter: Filter) extends LazyLogging {
 
   def filterRow(img: Mat, kernel: Mat): Mat = {
     val r, tmp = new Mat()
+    //val result = new Mat()
+    //val anchor = new Point(1, 0)
+    //opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
     val step = kernel.rows()
     val mod = step / 2 - 1
     for (i <- 0 - mod until img.cols() - mod) {
@@ -99,8 +103,9 @@ case class Transformer(filter: Filter) extends LazyLogging {
   }
 
   def filterColumn(img: Mat, kernel: Mat): Mat = {
-    //opencv_imgproc.filter2D(hh, high_1, -1, filter.columnHigh, anchor, delta, borderType)
     val result,tmp = new Mat()
+    //    val anchor = new Point(0, 1)
+    //    opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
     val step = kernel.cols()
     val mod = step / 2 - 1
     for (i <- 0 - mod until img.rows() - mod) {
