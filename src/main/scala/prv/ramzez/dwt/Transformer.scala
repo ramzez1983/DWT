@@ -4,51 +4,44 @@ import com.typesafe.scalalogging.LazyLogging
 import org.bytedeco.javacpp.opencv_core
 import org.bytedeco.javacpp.opencv_core.Mat
 
-object Transformer {
-}
+//TODO switch everything to opencv_core.CV_64F double precision
+case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter with WrapBorder {
 
-case class Transformer(filter: Filter) extends LazyLogging {
-
-  private def downscaleColumns(dest: Mat): Mat = scaleColumns(dest, 0.5)
+  private def get(r: Int, g: Int => Mat, z: Mat) = {
+    if (Math.floorMod(r, 2) != 0) g(Math.floorDiv(r, 2))
+    else z.clone()
+  }
 
   private def upscaleColumns(dest: Mat): Mat = {
     val columns = 0 until dest.cols() * 2
     val z = Mat.zeros(dest.col(0).rows(), 1, dest.`type`()).asMat()
-    val a = columns.map(r => get(dest, r, x => dest.col(x), z)).reduce { (a, b) => a.push_back(b); a }
+    val a = columns.map(r => get(r, x => dest.col(x), z)).reduce { (a, b) => a.push_back(b); a }
     val result =  a.reshape(0, columns.length).t().asMat()
     logger.debug(s"upscaled columns of ${printMat(dest)} to ${printMat(result)}")
     result
   }
 
-  private def get(dest: Mat, r: Int, g: Int => Mat, z: Mat) = {
-    if (Math.floorMod(r, 2) != 0) g(Math.floorDiv(r, 2))
-    else z.clone()
-  }
+  private def downscaleColumns(dest: Mat): Mat = scaleColumns(dest, 0.5)
 
   private def scaleColumns(dest: Mat, factor: Double): Mat = {
     val columns = 0 until (dest.cols() * factor).round.toInt
     columns.map(r => dest.col((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
   }
 
-  private def downscaleRows(dest: Mat): Mat = scaleRows(dest, 0.5)
-
   private def upscaleRows(dest: Mat): Mat = {
     val rows = 0 until dest.rows() * 2
     val z = Mat.zeros(1, dest.row(0).cols(), dest.`type`()).asMat()
-    val result = rows.map(r => get(dest, r, x => dest.row(x), z)).reduce { (a, b) => a.push_back(b); a }
+    val result = rows.map(r => get(r, x => dest.row(x), z)).reduce { (a, b) => a.push_back(b); a }
     logger.debug(s"upscaled rows of ${printMat(dest)} to ${printMat(result)}")
     result
   }
+
+  private def downscaleRows(dest: Mat): Mat = scaleRows(dest, 0.5)
 
   private def scaleRows(dest: Mat, factor: Double): Mat = {
     val rows = 0 until (dest.rows() * factor).round.toInt
     rows.map(r => dest.row((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }
   }
-
-  //private val anchor = new Point(0, 1)
-  //private val delta = 0.0
-  //switching to own implementation because opencv_imgproc.filter2D does not support circular boarder type
-  //private val borderType = opencv_core.BORDER_DEFAULT
 
   def recomposeStep(dwtStep: DwtStep): Mat = {
     logger.debug(s"recompose step started")
@@ -71,51 +64,6 @@ case class Transformer(filter: Filter) extends LazyLogging {
     result
   }
 
-  def filterRow(img: Mat, kernel: Mat): Mat = {
-    val r, tmp = new Mat()
-    //val result = new Mat()
-    //val anchor = new Point(1, 0)
-    //opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
-    val step = kernel.rows()
-    val mod = step / 2 - 1
-    for (i <- 0 - mod until img.cols() - mod) {
-      opencv_core.gemm(getColRange(img, i, step), kernel, 1, new Mat(), 0, tmp)
-      r.push_back(tmp)
-    }
-    val result = r.reshape(0, img.rows()).t().asMat()
-    logger.debug(s"filtered rows of ${printMat(img)} to ${printMat(result)}")
-    result
-  }
-
-  def getColRange(img: Mat, start: Int, size: Int): Mat = {
-    val result = new Mat
-    for (i <- start until (start+size)) {
-      result.push_back(img.col(withBorder(i, img.cols())))
-    }
-    result.reshape(0, size).t().asMat()
-  }
-
-  private def withBorder(i: Int, max: Int) = {
-    val r = Math.floorMod(i, max)
-    //val r = if (i < 0) -i else if (i>=max)  max - (i - max) - 2 else i
-    //val r = if (i < 0) 0 else if (i>=max)  max-1 else i
-    r
-  }
-
-  def filterColumn(img: Mat, kernel: Mat): Mat = {
-    val result,tmp = new Mat()
-    //    val anchor = new Point(0, 1)
-    //    opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
-    val step = kernel.cols()
-    val mod = step / 2 - 1
-    for (i <- 0 - mod until img.rows() - mod) {
-      opencv_core.gemm(kernel, getRowRange(img, i, step), 1, new Mat(), 0, tmp)
-      result.push_back(tmp)
-    }
-    logger.debug(s"filtered columns of ${printMat(img)} to ${printMat(result)}")
-    result
-  }
-
   def decomposeStep(img: Mat): DwtStep = {
     logger.debug(s"decompose step started")
     val low = downscaleColumns(filterRow(img,filter.rowLow))
@@ -129,13 +77,6 @@ case class Transformer(filter: Filter) extends LazyLogging {
     DwtStep(hh, hl, lh, ll)
   }
 
-  def getRowRange(img: Mat, start: Int, size: Int): Mat = {
-    val result = new Mat
-    for (i <- start until (start + size)) {
-      result.push_back(img.row(withBorder(i, img.rows())))
-    }
-    result
-  }
 
   def decompose(img: Mat, level: Int): DwtStructure = {
     decompose(img, level, List())

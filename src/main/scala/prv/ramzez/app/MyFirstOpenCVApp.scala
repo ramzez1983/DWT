@@ -1,9 +1,11 @@
+package prv.ramzez.app
+
 import java.nio.file.Paths
 
 import javax.swing.JFrame
 import org.bytedeco.javacpp.indexer.FloatIndexer
 import org.bytedeco.javacpp.opencv_core.{Mat, Point}
-import org.bytedeco.javacpp.opencv_imgcodecs._
+import org.bytedeco.javacpp.opencv_imgcodecs.imread
 import org.bytedeco.javacpp.{opencv_core, opencv_imgproc}
 import org.bytedeco.javacv.{CanvasFrame, OpenCVFrameConverter}
 
@@ -27,9 +29,9 @@ object MyFirstOpenCVApp extends App {
   val greyMat = new Mat()
   opencv_imgproc.cvtColor(img, greyMat, opencv_imgproc.CV_BGR2GRAY, 1)
   printDims(greyMat)
-  val img2 = img.reshape(3,1)
+  val img2 = img.reshape(3, 1)
   printDims(img2)
-  val vec = Mat.ones(4,1,opencv_core.CV_8UC1).asMat()
+  val vec = Mat.ones(4, 1, opencv_core.CV_8UC1).asMat()
   printDims(vec)
   val canvas = new CanvasFrame("My Image", 1)
 

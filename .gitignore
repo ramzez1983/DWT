@@ -28,3 +28,4 @@ project/plugins/project/
 ### Scala ###
 *.class
 *.log
+*.log.zip

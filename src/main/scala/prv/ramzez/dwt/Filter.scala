@@ -1,31 +1,63 @@
 package prv.ramzez.dwt
 
+import com.typesafe.scalalogging.LazyLogging
+import org.bytedeco.javacpp.opencv_core
 import org.bytedeco.javacpp.opencv_core.Mat
 
-case class Filter(columnLow: Mat, columnHigh: Mat) {
-  lazy val reversedColumnLow: Mat = reverseCol(columnLow)
-  lazy val reversedColumnHigh: Mat = reverseCol(columnHigh)
-  lazy val rowHigh: Mat = transpose(columnHigh)
-  lazy val rowLow: Mat = transpose(columnLow)
-  lazy val reversedRowHigh: Mat = transpose(reversedColumnHigh)
-  lazy val reversedRowLow: Mat = transpose(reversedColumnLow)
+trait Filter {
+  def filterColumn(img: Mat, kernel: Mat): Mat
 
-  private def transpose(filter: Mat): Mat = filter.t().asMat()
+  def filterRow(img: Mat, kernel: Mat): Mat
+}
 
-  private def reverseCol(filter: Mat): Mat = {
-    val columns = (0 until filter.cols()).reverse
-    val result = columns.map(r => filter.col(r)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
+//private val anchor = new Point(0, 1)
+//private val delta = 0.0
+//switching to own implementation because opencv_imgproc.filter2D does not support circular boarder type
+//private val borderType = opencv_core.BORDER_DEFAULT
+trait RangeFilter extends Filter with LazyLogging with Border {
+  private def getColRange(img: Mat, start: Int, size: Int): Mat = {
+    val result = new Mat
+    for (i <- start until (start + size)) {
+      result.push_back(img.col(getWithBorder(i, img.cols())))
+    }
+    result.reshape(0, size).t().asMat()
+  }
+
+  private def getRowRange(img: Mat, start: Int, size: Int): Mat = {
+    val result = new Mat
+    for (i <- start until (start + size)) {
+      result.push_back(img.row(getWithBorder(i, img.rows())))
+    }
     result
   }
 
-}
+  def filterColumn(img: Mat, kernel: Mat): Mat = {
+    val result, tmp = new Mat()
+    //    val anchor = new Point(0, 1)
+    //    opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
+    val step = kernel.cols()
+    val mod = step / 2 - 1
+    for (i <- 0 - mod until img.rows() - mod) {
+      opencv_core.gemm(kernel, getRowRange(img, i, step), 1, new Mat(), 0, tmp)
+      result.push_back(tmp)
+    }
+    logger.debug(s"filtered columns of ${printMat(img)} to ${printMat(result)}")
+    result
+  }
 
-object Filter {
-  private val s3 = Math.sqrt(3)
-  private val s2 = Math.sqrt(2)
-  val d4 = Filter(List((1 + s3) / 4 / s2, (3 + s3) / 4 / s2, (3 - s3) / 4 / s2, (1 - s3) / 4 / s2),
-    List((1 - s3) / 4 / s2, -1 * (3 - s3) / 4 / s2, (3 + s3) / 4 / s2, -1 * (1 + s3) / 4 / s2))
-
-  val haar = Filter(List(1 / s2, 1 / s2), List(1 / s2, -1 / s2))
-
+  def filterRow(img: Mat, kernel: Mat): Mat = {
+    val r, tmp = new Mat()
+    //val result = new Mat()
+    //val anchor = new Point(1, 0)
+    //opencv_imgproc.filter2D(img, result, -1, kernel.t().asMat(), anchor, delta, borderType)
+    val step = kernel.rows()
+    val mod = step / 2 - 1
+    for (i <- 0 - mod until img.cols() - mod) {
+      opencv_core.gemm(getColRange(img, i, step), kernel, 1, new Mat(), 0, tmp)
+      r.push_back(tmp)
+    }
+    val result = r.reshape(0, img.rows()).t().asMat()
+    logger.debug(s"filtered rows of ${printMat(img)} to ${printMat(result)}")
+    result
+  }
 }

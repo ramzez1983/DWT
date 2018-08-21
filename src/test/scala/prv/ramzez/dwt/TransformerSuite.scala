@@ -9,7 +9,7 @@ import org.scalatest.junit.JUnitRunner
 class TransformerSuite extends FunSuite {
   test("decompose step test") {
     //given
-    val trans = Transformer(Filter(List(1f, 1f), List(1f, -1f)))
+    val trans = Transformer(Wavelet(List(1f, 1f), List(1f, -1f)))
     val img = (0 until 16 map (i => i.toFloat) toList).reshape(0, 4)
     //    [[ 0, 1, 2, 3]
     //     [ 4, 5, 6, 7]
@@ -40,7 +40,7 @@ class TransformerSuite extends FunSuite {
   }
   test("decompose and recompose step test") {
     //given
-    val trans = Transformer(Filter.d4)
+    val trans = Transformer(Wavelet.d4)
     val dim = 8
 
     def produceValue(i: Int) = {
