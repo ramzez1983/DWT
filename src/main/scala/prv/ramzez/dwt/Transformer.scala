@@ -16,7 +16,7 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
     val columns = 0 until dest.cols() * 2
     val z = Mat.zeros(dest.col(0).rows(), 1, dest.`type`()).asMat()
     val a = columns.map(r => get(r, x => dest.col(x), z)).reduce { (a, b) => a.push_back(b); a }
-    val result =  a.reshape(0, columns.length).t().asMat()
+    val result = a.reshape(0, columns.length).t().asMat()
     logger.debug(s"upscaled columns of ${printMat(dest)} to ${printMat(result)}")
     result
   }
@@ -43,17 +43,17 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
     rows.map(r => dest.row((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }
   }
 
-  def recomposeStep(dwtStep: DwtStep): Mat = {
+  def recomposeStep(dwtStep: Dwt2DStep): Mat = {
     logger.debug(s"recompose step started")
-    val hh = upscaleRows(dwtStep.HH)
+    val hh = upscaleRows(dwtStep.hh)
     val high_1 = filterColumn(hh, filter.reversedColumnHigh)
-    val hl = upscaleRows(dwtStep.HL)
+    val hl = upscaleRows(dwtStep.hl)
     val high_2 = filterColumn(hl, filter.reversedColumnLow)
     val high = upscaleColumns(opencv_core.add(high_1, high_2).asMat())
 
-    val lh = upscaleRows(dwtStep.LH)
+    val lh = upscaleRows(dwtStep.lh)
     val low_1 = filterColumn(lh, filter.reversedColumnHigh)
-    val ll = upscaleRows(dwtStep.LL)
+    val ll = upscaleRows(dwtStep.ll)
     val low_2 = filterColumn(ll, filter.reversedColumnLow)
     val low = upscaleColumns(opencv_core.add(low_1, low_2).asMat())
 
@@ -64,29 +64,36 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
     result
   }
 
-  def decomposeStep(img: Mat): DwtStep = {
+  def decomposeStep(img: Mat): Dwt2DStep = {
     logger.debug(s"decompose step started")
-    val low = downscaleColumns(filterRow(img,filter.rowLow))
-    val high = downscaleColumns(filterRow(img,filter.rowHigh))
+    Dwt2DStep.mergeChannels(matSplit(img).map(i => decompose1ChannelStep(i)))
+  }
 
-    val ll = downscaleRows(filterColumn(low,filter.columnLow))
-    val lh = downscaleRows(filterColumn(low,filter.columnHigh))
-    val hl = downscaleRows(filterColumn(high,filter.columnLow))
-    val hh = downscaleRows(filterColumn(high,filter.columnHigh))
+  private def decompose1ChannelStep(img: Mat): Dwt2DStep = {
+    logger.debug(s"decompose step started")
+    val low = downscaleColumns(filterRow(img, filter.rowLow))
+    val high = downscaleColumns(filterRow(img, filter.rowHigh))
 
-    DwtStep(hh, hl, lh, ll)
+    val ll = downscaleRows(filterColumn(low, filter.columnLow))
+    val lh = downscaleRows(filterColumn(low, filter.columnHigh))
+    val hl = downscaleRows(filterColumn(high, filter.columnLow))
+    val hh = downscaleRows(filterColumn(high, filter.columnHigh))
+
+    Dwt2DStep(hh, hl, lh, ll)
   }
 
 
   def decompose(img: Mat, level: Int): DwtStructure = {
-    decompose(img, level, List())
+    val floatMat = new Mat()
+    img.convertTo(floatMat, opencv_core.CV_32F)
+    decompose(floatMat, level, List())
   }
 
   def decompose(img: Mat, level: Int, structure: DwtStructure): DwtStructure = {
     if (level <= 0) structure
     else {
       val step = decomposeStep(img)
-      decompose(step.LL, level - 1, structure :+ step)
+      decompose(step.ll, level - 1, structure :+ step)
     }
   }
 }

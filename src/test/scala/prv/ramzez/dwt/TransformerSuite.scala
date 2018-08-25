@@ -35,7 +35,7 @@ class TransformerSuite extends FunSuite {
     //      42,50]]
     //then
     val ll = List(10f, 18f, 42f, 50f).reshape(0, 2)
-    assert(matEquals(ll, struc.LL), s"ll should be: ${ll.createIndexer().asInstanceOf[FloatIndexer]}, ll is: ${struc.LL.createIndexer().asInstanceOf[FloatIndexer]}"
+    assert(matEquals(ll, struc.ll), s"ll should be: ${ll.createIndexer().asInstanceOf[FloatIndexer]}, ll is: ${struc.ll.createIndexer().asInstanceOf[FloatIndexer]}"
     )
   }
   test("decompose and recompose step test") {
