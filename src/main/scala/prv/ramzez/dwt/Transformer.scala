@@ -25,7 +25,8 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
 
   private def scaleColumns(dest: Mat, factor: Double): Mat = {
     val columns = 0 until (dest.cols() * factor).round.toInt
-    columns.map(r => dest.col((r / factor).toInt)).reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
+    val list = columns.map(r => dest.col((r / factor).toInt))
+    list.reduce { (a, b) => a.push_back(b); a }.reshape(0, columns.length).t().asMat()
   }
 
   private def upscaleRows(dest: Mat): Mat = {
@@ -66,11 +67,6 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
 
   def decomposeStep(img: Mat): Dwt2DStep = {
     logger.debug(s"decompose step started")
-    Dwt2DStep.mergeChannels(matSplit(img).map(i => decompose1ChannelStep(i)))
-  }
-
-  private def decompose1ChannelStep(img: Mat): Dwt2DStep = {
-    logger.debug(s"decompose step started")
     val low = downscaleColumns(filterRow(img, filter.rowLow))
     val high = downscaleColumns(filterRow(img, filter.rowHigh))
 
@@ -86,7 +82,9 @@ case class Transformer(filter: Wavelet) extends LazyLogging with RangeFilter wit
   def decompose(img: Mat, level: Int): DwtStructure = {
     val floatMat = new Mat()
     img.convertTo(floatMat, opencv_core.CV_32F)
-    decompose(floatMat, level, List())
+    val splitted = matSplit(floatMat)
+    val splittedResult = splitted.map(i => decompose(i, level, List()))
+    splittedResult.transpose.map(l => Dwt2DStep.mergeChannels(l))
   }
 
   def decompose(img: Mat, level: Int, structure: DwtStructure): DwtStructure = {

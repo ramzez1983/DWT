@@ -14,7 +14,7 @@ class WaveletSuite extends FunSuite {
     val columnLow = Mat.eye(2, 1, opencv_core.CV_32F).asMat()
     val columnHigh = Mat.ones(2, 1, opencv_core.CV_32F).asMat()
     //when
-    val f = Wavelet(columnLow.reshape(0, 1), columnHigh.reshape(0, 1))
+    val f = Wavelet(columnLow, columnHigh)
     //then
     assert(matEquals(columnLow, f.columnLow), s"columnLow should be: ${columnLow.createIndexer().asInstanceOf[FloatIndexer]} but was ${f.columnLow.createIndexer().asInstanceOf[FloatIndexer]}")
     assert(matEquals(columnHigh, f.columnHigh), s"columnLow should be: ${columnHigh.createIndexer().asInstanceOf[FloatIndexer]} but was ${f.columnHigh.createIndexer().asInstanceOf[FloatIndexer]}")

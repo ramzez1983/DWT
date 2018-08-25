@@ -25,7 +25,7 @@ package object dwt {
   def matSplit(img: Mat): List[Mat] = {
     val splited = new MatVector()
     opencv_core.split(img, splited)
-    (for (i <- 0l until splited.size()) yield splited.get(i)).toList
+    (0l until splited.size()).map(i => splited.get(i).clone()).toList
   }
 
   def matMerge(channels: List[Mat]): Mat = {

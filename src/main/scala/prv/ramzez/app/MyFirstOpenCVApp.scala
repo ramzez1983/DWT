@@ -2,7 +2,7 @@ package prv.ramzez.app
 
 import java.nio.file.Paths
 
-import javax.swing.JFrame
+import javax.swing.WindowConstants
 import org.bytedeco.javacpp.indexer.FloatIndexer
 import org.bytedeco.javacpp.opencv_core.{Mat, Point}
 import org.bytedeco.javacpp.opencv_imgcodecs.imread
@@ -62,7 +62,7 @@ object MyFirstOpenCVApp extends App {
   println(s"dest_3: ${dest_3.createIndexer().asInstanceOf[FloatIndexer]}")
 
   // Request closing of the application when the image window is closed
-  canvas.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE)
+  canvas.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE)
 
   // Convert from OpenCV Mat to Java Buffered image for display
   val converter = new OpenCVFrameConverter.ToMat()
